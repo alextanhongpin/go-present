@@ -5,9 +5,8 @@
 package main
 
 import (
+	"embed"
 	"flag"
-	"fmt"
-	"go/build"
 	"html/template"
 	"io"
 	"os"
@@ -16,15 +15,11 @@ import (
 	"golang.org/x/tools/present"
 )
 
-const basePkg = "github.com/alextanhongpin/go-present"
+//go:embed templates/*.tmpl
+var templates embed.FS
 
 func init() {
-	p, err := build.Default.Import(basePkg, "", build.FindOnly)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Couldn't find gopresent files: %v\n", err)
-		os.Exit(1)
-	}
-	initTemplates(p.Dir)
+	initTemplates(".")
 }
 
 var (
@@ -59,8 +54,6 @@ func main() {
 }
 
 var (
-	// dirListTemplate holds the front page template.
-	dirListTemplate *template.Template
 	// contentTemplate maps the presentable file extensions to the
 	// template to be executed.
 	contentTemplate map[string]*template.Template
@@ -81,14 +74,12 @@ func initTemplates(base string) error {
 		// Read and parse the input.
 		tmpl := present.Template()
 		tmpl = tmpl.Funcs(template.FuncMap{"playable": playable})
-		if _, err := tmpl.ParseFiles(actionTmpl, contentTmpl); err != nil {
+		if _, err := tmpl.ParseFS(templates, actionTmpl, contentTmpl); err != nil {
 			return err
 		}
 		contentTemplate[ext] = tmpl
 	}
-	var err error
-	dirListTemplate, err = template.ParseFiles(filepath.Join(base, "templates/dir.tmpl"))
-	return err
+	return nil
 }
 
 // renderDoc reads the present file, gets its template representation,

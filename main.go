@@ -9,6 +9,7 @@ import (
 	"flag"
 	"html/template"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -17,6 +18,9 @@ import (
 
 //go:embed templates/*.tmpl
 var templates embed.FS
+
+//go:embed static
+var static embed.FS
 
 func init() {
 	initTemplates(".")
@@ -49,6 +53,11 @@ func main() {
 
 	name := filepath.Join(contentPath, *in)
 	if err := renderDoc(f, name); err != nil {
+		panic(err)
+	}
+
+	// Copy 'static' directory.
+	if err := copyStatic(static, out); err != nil {
 		panic(err)
 	}
 }
@@ -116,4 +125,53 @@ func playable(c present.Code) bool {
 		return play && c.Ext == ".go"
 	}
 	return play
+}
+
+func copyStatic(static embed.FS, out string) error {
+	return fs.WalkDir(static, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		// Copy the file
+		dir := filepath.Dir(out)
+		newPath := filepath.Join(dir, path)
+		f, err := static.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		if err := CopyFile(f, newPath); err != nil {
+			return err
+		}
+
+		return err
+	})
+}
+
+func CopyFile(srcFile io.Reader, dst string) error {
+	dir := filepath.Dir(dst)
+	if err := os.MkdirAll(dir, 0700); err != nil && !os.IsExist(err) {
+		return err
+	} // Create your file
+
+	// Create the destination file
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	// Copy the file contents
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
